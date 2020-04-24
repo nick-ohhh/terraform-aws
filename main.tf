@@ -1,17 +1,29 @@
+variable "role_arn" {}
+variable "region" {}
+variable "shared_credentials_file" {}
+variable "profile" {}
+variable "key_name" {}
+variable "public_key" {}
+# variable "private_key" {}
+
 #set provider and location of servers being used
 provider "aws" {
-    region  = "us-west-2"
+    assume_role ={
+    role_arn                = var.role_arn
+    region                  = var.region
+    shared_credentials_file = var.shared_credentials_file
+    profile                 = var.profile
+    }
 }
 
 #create vpc and set ip address and routing prefix
 resource "aws_vpc" "vpc1" {
     cidr_block  = "10.100.0.0/16"
-}
 
-# display information on vpc "vpc1"
-# output "vpc1" {
-#     value = aws_vpc.vpc1
-# }
+    tags    = {
+        Name = "vpc1"    
+    }
+}
 
 #creates subnet mask in "vpc1"
 resource "aws_subnet" "public" {
@@ -34,13 +46,59 @@ resource "aws_subnet" "private" {
     }
 }
 
-#specifies operating system and hardware for ec2 instance
-resource "aws_instance" "instance_web" {
-    ami             = "ami-08692d171e3cf02d6"
-    key_name        = var.key_name
-    instance_type   = "t2.micro"
-    subnet_id       = aws_subnet.public.id
+#creates secondary public subnet
+resource "aws_subnet" "public2" {
+    vpc_id                  = aws_vpc.vpc1.id
+    cidr_block              = "10.100.5.0/24"
+    map_public_ip_on_launch = true
+
+    tags = {
+        Name = "public2"
+    }
 }
+
+#create internet gateway for vpc.
+#required for instances to connect online
+resource "aws_internet_gateway" "vpc_gw" {
+    vpc_id  = aws_vpc.vpc1.id
+
+    tags    = {
+        Name = "vpc_gw"
+    }
+}
+
+#create and set VPC routing table
+resource "aws_route_table" "vpc_rt" {
+    vpc_id  = aws_vpc.vpc1.id
+
+    route {
+        cidr_block  = "0.0.0.0/0"
+        gateway_id  = aws_internet_gateway.vpc_gw.id
+    }
+
+    tags = {
+        Name = "vpc_rt"
+    }
+}
+
+#associate route table with subnet
+resource "aws_route_table_association" "vpc_route_associate" {
+    subnet_id       = aws_subnet.public.id
+    route_table_id  = aws_route_table.vpc_rt.id
+}
+
+resource "aws_route_table_association" "vpc_route_associate2" {
+    subnet_id       = aws_subnet.public2.id
+    route_table_id  = aws_route_table.vpc_rt.id
+}
+
+# specifies operating system and hardware for a single ec2 instance
+# resource "aws_instance" "instance_web" {
+#     ami             = "ami-08692d171e3cf02d6"
+#     instance_type   = "t2.micro"
+#     subnet_id       = aws_subnet.public.id
+#     depends_on      = [aws_internet_gateway.vpc_gw]
+# }
 
 #create new security group for "vpc1" with inbound/outbound rules
 resource "aws_security_group" "Web" {
@@ -48,25 +106,32 @@ resource "aws_security_group" "Web" {
     description = "Allows SSH and web traffic"
     vpc_id      = aws_vpc.vpc1.id
 
-    #only allows ssh inbound connections
+    #allows SSH inbound connections
     ingress {
         from_port   = 22
         to_port     = 22
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
     }
-    #allows HTTP outbound connections from instance
-    egress {
+    #allows HTTP inbound connections
+    ingress {
         from_port   = 80
         to_port     = 80
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
     }
-    #allows HTTPS outbound connections from instance
-    egress {
+    #allows HTTPS inbound connections
+    ingress {
         from_port   = 443
         to_port     = 443
         protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+    #allows any outbound connections from instance
+    egress {
+        from_port   = 0
+        to_port     = 0
+        protocol    = "-1"
         cidr_blocks = ["0.0.0.0/0"]
     }
 }
@@ -75,65 +140,87 @@ resource "aws_security_group" "Web" {
 resource "aws_default_security_group" "default" {
     vpc_id  = aws_vpc.vpc1.id
 
-    #only allows ssh inbound connections
+    #allows SSH inbound connections
     ingress {
         from_port   = 22
         to_port     = 22
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
     }
-    #allows HTTP outbound connections from instance
-    egress {
+    #allows HTTP inbound connections
+    ingress {
         from_port   = 80
         to_port     = 80
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
     }
-    #allows HTTPS outbound connections from instance
-    egress {
+    #allows HTTPS inbound connections
+    ingress {
         from_port   = 443
         to_port     = 443
         protocol    = "tcp"
         cidr_blocks = ["0.0.0.0/0"]
     }
+    #allows any outbound connections from instance
+    egress {
+        from_port   = 0
+        to_port     = 0
+        protocol    = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
 }
 
-#attaches security groups to ec2 instance on creation
-resource "aws_network_interface_sg_attachment" "sg_attachment" {
-    security_group_id       = aws_security_group.Web.id
-    network_interface_id    = aws_instance.instance_web.primary_network_interface_id
+# attaches security groups to single ec2 instance on creation
+# resource "aws_network_interface_sg_attachment" "sg_attachment" {
+#     security_group_id       = aws_security_group.Web.id
+#     network_interface_id    = aws_instance.instance_web.primary_network_interface_id
+# }
+
+resource "aws_key_pair" "terraform" {
+    key_name    = var.key_name
+    public_key  = var.public_key
+    # private_key = var.private_key
 }
 
 #resource to select image for new spawns via asg
-resource "aws_launch_configuration" "asg_lconf" {
-    name          = "web_lconfig"
-    image_id      = aws_instance.instance_web.ami
-    instance_type = "t2.micro"
+resource "aws_launch_configuration" "asg_lconfig" {
+    name_prefix     = "asg_lconfig-"
+    image_id        = "ami-08692d171e3cf02d6"
+    instance_type   = "t2.micro"
+    key_name        = var.key_name
+    security_groups = [aws_security_group.Web.id]
+
+    lifecycle {
+        create_before_destroy = true
+    }
 }
 
 #creates auto scaling group with specifications
-resource "aws_autoscaling_group" "instance_asg" {
+resource "aws_autoscaling_group" "web_asg" {
     name                      = "web_asg"
-    availability_zones        = ["us-west-2a"]
-    vpc_zone_identifier       = [aws_subnet.public.id, aws_subnet.private.id]
+    launch_configuration      = aws_launch_configuration.asg_lconfig.name
+    #availability_zones        = ["us-west-2a"]
+    vpc_zone_identifier       = [aws_subnet.public.id, aws_subnet.public2.id]
     health_check_grace_period = 200
     max_size                  = 2
     min_size                  = 2
-    desired_capacity          = 2
-    launch_configuration = aws_launch_configuration.asg_lconf.name
 
-    # provisioner "remote-exec" { #installs nginx for all new instances spun up by auto scaling
-    #     connection {
-    #         type        = "ssh"
-    #         host        = ""
-    #         user        = "root"
-    #         private_key = "home/vagrant/.ssh/terraform-ec2.pem"
-    #     } 
-    #     inline = [
-    #         "sleep 10",
-    #         "sudo apt-get -y update",
-    #         "sudo apt-get -y install nginx",
-    #         "sudo service nginx start",
-    #     ]
-    # }
+    lifecycle {
+        create_before_destroy = true
+    }
+
+    provisioner "remote-exec" { #installs nginx for all new instances spun up by auto scaling
+        connection {
+            type        = "ssh"
+            host        = ""
+            user        = "ubuntu"
+            # private_key = aws_key_pair.terraform.private_key
+        } 
+        inline = [
+            "sleep 10",
+            "sudo apt-get -y update",
+            "sudo apt-get -y install nginx",
+            "sudo service nginx start",
+        ]
+    }
 }

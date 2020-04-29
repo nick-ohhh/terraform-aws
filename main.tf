@@ -4,7 +4,6 @@ variable "shared_credentials_file" {}
 variable "profile" {}
 variable "key_name" {}
 variable "public_key" {}
-# variable "private_key" {}
 
 #set provider and location of servers being used
 provider "aws" {
@@ -30,6 +29,7 @@ resource "aws_subnet" "public" {
     vpc_id                  = aws_vpc.vpc1.id
     cidr_block              = "10.100.1.0/24"
     map_public_ip_on_launch = true
+    availability_zone       = "us-west-2a"
 
     tags = {
         Name = "public"
@@ -51,6 +51,7 @@ resource "aws_subnet" "public2" {
     vpc_id                  = aws_vpc.vpc1.id
     cidr_block              = "10.100.5.0/24"
     map_public_ip_on_launch = true
+    availability_zone       = "us-west-2b"
 
     tags = {
         Name = "public2"
@@ -188,6 +189,7 @@ resource "aws_launch_configuration" "asg_lconfig" {
     image_id        = "ami-08692d171e3cf02d6"
     instance_type   = "t2.micro"
     key_name        = var.key_name
+    user_data       = file("nginx_setup.sh")
     security_groups = [aws_security_group.Web.id]
 
     lifecycle {
@@ -204,23 +206,41 @@ resource "aws_autoscaling_group" "web_asg" {
     health_check_grace_period = 200
     max_size                  = 2
     min_size                  = 2
+    target_group_arns         = [aws_lb_target_group.nginx_tg.arn]
 
     lifecycle {
         create_before_destroy = true
     }
+}
 
-    provisioner "remote-exec" { #installs nginx for all new instances spun up by auto scaling
-        connection {
-            type        = "ssh"
-            host        = ""
-            user        = "ubuntu"
-            # private_key = aws_key_pair.terraform.private_key
-        } 
-        inline = [
-            "sleep 10",
-            "sudo apt-get -y update",
-            "sudo apt-get -y install nginx",
-            "sudo service nginx start",
-        ]
+#application load balancer
+resource "aws_lb" "nginx_lb" {
+    name                = "nginx-lb"
+    load_balancer_type  = "application"
+    security_groups     = [aws_security_group.Web.id]
+    subnets             = [aws_subnet.public.id, aws_subnet.public2.id]
+}
+
+#load balancer target group
+resource "aws_lb_target_group" "nginx_tg" {
+    name        = "nginx-tg"
+    port        = 80
+    protocol    = "HTTP"
+    vpc_id      = aws_vpc.vpc1.id
+
+    health_check {
+        port    = 80
+    }
+}
+
+#load balancer listener
+resource "aws_lb_listener" "nginx_listener" {
+    load_balancer_arn   = aws_lb.nginx_lb.arn
+    port                = 80
+    protocol            = "HTTP"
+
+    default_action {
+        type                = "forward"
+        target_group_arn    = aws_lb_target_group.nginx_tg.arn
     }
 }

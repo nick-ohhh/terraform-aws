@@ -1,17 +1,11 @@
-# variable "access_key" {}
-
-# variable "secret_key" {}
-
-role_arn = "arn:aws:iam:::role/AWSServiceRoleForAutoScaling"
+role_arn = "arn:aws:iam::id:role/ROLE"
 
 region = "us-west-2"
 
-shared_credentials_file = "/home/vagrant/.aws/credentials"
+shared_credentials_file = "/path/to/credentials"
 
-profile = ""
+profile = "user"
 
-key_name = "terraform-key"
+key_name = "key name"
 
-public_key = ""
-
-# private_key = "/home/vagrant/.ssh/terraform-key"
+public_key = "public key"

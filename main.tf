@@ -246,13 +246,13 @@ resource "aws_lb_listener" "nginx_listener" {
 }
 
 #s3 bucket resource, media storage
-resource "aws_s3_bucket" "jjba_logo" {
-    bucket  = "jjba-logo"
+resource "aws_s3_bucket" "jjbalogo" {
+    bucket  = "jjbalogo"
 }
 
 #bucket and object location
 resource "aws_s3_bucket_object" "bucket_logo" {
-    bucket  = aws_s3_bucket.jjba_logo.id
+    bucket  = aws_s3_bucket.jjbalogo.id
     key     = "jjba_logo.jpg"
     source = "./jjba_logo.jpg"
 }
@@ -297,8 +297,8 @@ data "aws_iam_policy_document" "bucket_policy_document" {
                         "s3:ListBucket"
         ]
         resources = [
-                        "arn:aws:s3:::jjba_logo",
-                        "arn:aws:s3:::jjba_logo/*"
+                        "arn:aws:s3:::jjbalogo",
+                        "arn:aws:s3:::jjbalogo/*"
                         ]
                 }
         statement {
@@ -344,3 +344,4 @@ resource "aws_iam_role_policy_attachment" "bucket_role_policy_attach" {
 resource "aws_iam_instance_profile" "bucket_profile" {
     name    = "bucket_profile"
     role    = aws_iam_role.bucket_logo_role.name
+}

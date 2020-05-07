@@ -244,3 +244,103 @@ resource "aws_lb_listener" "nginx_listener" {
         target_group_arn    = aws_lb_target_group.nginx_tg.arn
     }
 }
+
+#s3 bucket resource, media storage
+resource "aws_s3_bucket" "jjba_logo" {
+    bucket  = "jjba-logo"
+}
+
+#bucket and object location
+resource "aws_s3_bucket_object" "bucket_logo" {
+    bucket  = aws_s3_bucket.jjba_logo.id
+    key     = "jjba_logo.jpg"
+    source = "./jjba_logo.jpg"
+}
+
+#bucket policy json data
+data "aws_iam_policy_document" "bucket_policy_document" {
+    statement {
+        effect = "Allow"
+        actions = [
+            "s3:ListBucketByTags",
+                        "s3:GetLifecycleConfiguration",
+                        "s3:GetBucketTagging",
+                        "s3:GetInventoryConfiguration",
+                        "s3:GetObjectVersionTagging",
+                        "s3:ListBucketVersions",
+                        "s3:GetBucketLogging",
+                        "s3:GetAccelerateConfiguration",
+                        "s3:GetBucketPolicy",
+                        "s3:GetObjectVersionTorrent",
+                        "s3:GetObjectAcl",
+                        "s3:GetEncryptionConfiguration",
+                        "s3:GetBucketRequestPayment",
+                        "s3:GetObjectVersionAcl",
+                        "s3:GetObjectTagging",
+                        "s3:GetMetricsConfiguration",
+                        "s3:GetBucketPublicAccessBlock",
+                        "s3:GetBucketPolicyStatus",
+                        "s3:ListBucketMultipartUploads",
+                        "s3:GetBucketWebsite",
+                        "s3:GetBucketVersioning",
+                        "s3:GetBucketAcl",
+                        "s3:GetBucketNotification",
+                        "s3:GetReplicationConfiguration",
+                        "s3:ListMultipartUploadParts",
+                        "s3:GetObject",
+                        "s3:GetObjectTorrent",
+                        "s3:GetBucketCORS",
+                        "s3:GetAnalyticsConfiguration",
+                        "s3:GetObjectVersionForReplication",
+                        "s3:GetBucketLocation",
+                        "s3:GetObjectVersion",
+                        "s3:ListBucket"
+        ]
+        resources = [
+                        "arn:aws:s3:::jjba_logo",
+                        "arn:aws:s3:::jjba_logo/*"
+                        ]
+                }
+        statement {
+                effect = "Allow"
+                actions = [
+                "s3:GetAccountPublicAccessBlock",
+                "s3:ListAllMyBuckets",
+                "s3:HeadBucket"
+                ]
+                resources = [ "*"]
+    }
+}
+
+#policy for instances to access/interact with bucket
+resource "aws_iam_policy" "bucket_logo_policy" {
+    name        = "bucket_logo_policy"
+    description = "Policy for interactions and properties of S3 bucket"
+    policy      = data.aws_iam_policy_document.bucket_policy_document.json
+}
+
+data "aws_iam_policy_document" "bucket_role_document" {
+    statement {
+                actions = ["sts:AssumeRole"]
+                principals {
+                        type = "Service"
+                        identifiers = ["ec2.amazonaws.com"]
+                }
+                effect = "Allow"
+        }
+}
+
+#instance role/permissions for bucket interaction
+resource "aws_iam_role" "bucket_logo_role" {
+    name                = "bucket_logo_role"
+    assume_role_policy  = data.aws_iam_policy_document.bucket_role_document.json
+}
+
+resource "aws_iam_role_policy_attachment" "bucket_role_policy_attach" {
+    role        = aws_iam_role.bucket_logo_role.name
+    policy_arn  = aws_iam_policy.bucket_logo_policy.arn
+}
+
+resource "aws_iam_instance_profile" "bucket_profile" {
+    name    = "bucket_profile"
+    role    = aws_iam_role.bucket_logo_role.name

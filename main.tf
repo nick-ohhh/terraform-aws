@@ -191,6 +191,7 @@ resource "aws_launch_configuration" "asg_lconfig" {
     key_name        = var.key_name
     user_data       = file("nginx_setup.sh")
     security_groups = [aws_security_group.Web.id]
+    iam_instance_profile = aws_iam_instance_profile.bucket_profile.name
 
     lifecycle {
         create_before_destroy = true
@@ -260,42 +261,13 @@ resource "aws_s3_bucket_object" "bucket_logo" {
 #bucket policy json data
 data "aws_iam_policy_document" "bucket_policy_document" {
     statement {
+        sid = "AllowPublicRead"
         effect = "Allow"
         actions = [
-            "s3:ListBucketByTags",
-                        "s3:GetLifecycleConfiguration",
-                        "s3:GetBucketTagging",
-                        "s3:GetInventoryConfiguration",
-                        "s3:GetObjectVersionTagging",
-                        "s3:ListBucketVersions",
-                        "s3:GetBucketLogging",
-                        "s3:GetAccelerateConfiguration",
-                        "s3:GetBucketPolicy",
-                        "s3:GetObjectVersionTorrent",
-                        "s3:GetObjectAcl",
-                        "s3:GetEncryptionConfiguration",
-                        "s3:GetBucketRequestPayment",
-                        "s3:GetObjectVersionAcl",
-                        "s3:GetObjectTagging",
-                        "s3:GetMetricsConfiguration",
-                        "s3:GetBucketPublicAccessBlock",
-                        "s3:GetBucketPolicyStatus",
-                        "s3:ListBucketMultipartUploads",
-                        "s3:GetBucketWebsite",
-                        "s3:GetBucketVersioning",
-                        "s3:GetBucketAcl",
-                        "s3:GetBucketNotification",
-                        "s3:GetReplicationConfiguration",
-                        "s3:ListMultipartUploadParts",
-                        "s3:GetObject",
-                        "s3:GetObjectTorrent",
-                        "s3:GetBucketCORS",
-                        "s3:GetAnalyticsConfiguration",
-                        "s3:GetObjectVersionForReplication",
-                        "s3:GetBucketLocation",
-                        "s3:GetObjectVersion",
-                        "s3:ListBucket"
-        ]
+                    "s3:GetObject",
+                    "s3:GetAccountPublicAccessBlock",
+                    "s3:ListAllMyBuckets",
+                    "s3:HeadBucket"                        ]
         resources = [
                         "arn:aws:s3:::jjbalogo",
                         "arn:aws:s3:::jjbalogo/*"
@@ -304,9 +276,10 @@ data "aws_iam_policy_document" "bucket_policy_document" {
         statement {
                 effect = "Allow"
                 actions = [
-                "s3:GetAccountPublicAccessBlock",
-                "s3:ListAllMyBuckets",
-                "s3:HeadBucket"
+                            "s3:GetObject",
+                            "s3:GetAccountPublicAccessBlock",
+                            "s3:ListAllMyBuckets",
+                            "s3:HeadBucket"
                 ]
                 resources = [ "*"]
     }

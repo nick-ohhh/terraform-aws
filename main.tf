@@ -186,7 +186,7 @@ resource "aws_key_pair" "terraform" {
 #resource to select image for new spawns via asg
 resource "aws_launch_configuration" "asg_lconfig" {
     name_prefix     = "asg_lconfig-"
-    image_id        = "ami-08692d171e3cf02d6"
+    image_id        = "ami-0d9861d1746488a0e"
     instance_type   = "t2.micro"
     key_name        = var.key_name
     user_data       = file("nginx_setup.sh")
